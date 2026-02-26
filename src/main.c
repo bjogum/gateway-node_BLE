@@ -73,15 +73,15 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
     esp_lcd_panel_draw_bitmap(panel_handle, area->x1, area->y1, area->x2 + 1, area->y2 + 1, px_map); // Sends pixels to ILI9341
 }
 
-// Funktionsprototyper
+// Menu-prototyopes
 void ui_home_screen_init(void);
 void ui_settings_screen_init(void);
 
-// --- DELADE CALLBACKS ---
+// ======== SHARED CALLBACKS =========
 
 static void change_to_settings_cb(lv_event_t * e) {
     if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        // Skapa inställningar och ta bort hemskärmen (true = auto_del)
+        // Create settings and remove home_screen (true = auto_del)
         ui_settings_screen_init();
         lv_screen_load_anim(lv_screen_active(), LV_SCR_LOAD_ANIM_FADE_ON, 200, 0, true);
     }
@@ -89,13 +89,13 @@ static void change_to_settings_cb(lv_event_t * e) {
 
 static void change_to_home_cb(lv_event_t * e) {
     if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        // Skapa hemskärm och ta bort inställningar (true = auto_del)
+        // Create home_screen and remove settings (true = auto_del)
         ui_home_screen_init();
         lv_screen_load_anim(lv_screen_active(), LV_SCR_LOAD_ANIM_FADE_ON, 200, 0, true);
     }
 }
 
-// --- HEMSKÄRM ---
+// ====== HOMESCREEN ========
 void ui_home_screen_init(void) {
     lv_obj_t * scr = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(scr, lv_palette_main(LV_PALETTE_BLUE), 0);
@@ -106,13 +106,13 @@ void ui_home_screen_init(void) {
     lv_obj_t * label = lv_label_create(btn);
     lv_label_set_text(label, "Settings");
 
-    // Registrera callback
+    // Register callback
     lv_obj_add_event_cb(btn, change_to_settings_cb, LV_EVENT_CLICKED, NULL);
 
     lv_screen_load(scr);
 }
 
-// --- INSTÄLLNINGAR ---
+// ======== Settings =======
 void ui_settings_screen_init(void) {
     lv_obj_t * scr = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(scr, lv_palette_main(LV_PALETTE_GREY), 0);
