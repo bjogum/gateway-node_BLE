@@ -10,6 +10,7 @@
 #include "esp_lcd_ili9341.h"
 #include "esp_lcd_touch_xpt2046.h"
 #include "dht11_driver.h"
+#include "led_pwm.h"
 
 // ========== PIN-CONFIG ==========
 #define LCD_HOST       SPI2_HOST
@@ -23,20 +24,29 @@
 #define PIN_TOUCH_IRQ  5
 
 // ========== GLOBALS ==========
-
 esp_lcd_touch_handle_t touch_handle = NULL;
 static lv_display_t * disp_global = NULL;
 static bool hardware_ready = false;
+lv_obj_t * inside_box = NULL;
 lv_obj_t * inside_temp  = NULL;
 lv_obj_t * inside_humid = NULL;
+
+// ======== ALARM STATE ========
+typedef enum {
+    ALARM_OFF = 0,
+    ALARM_ARMED,
+    ALARM_TRIGGERED,
+} alarm_state_t;
+
+static alarm_state_t alarm_state = ALARM_OFF;
+static lv_obj_t * alarm_btn = NULL;
+static lv_obj_t * alarm_label = NULL;
 
 // ========== SENSOR READING ==========
 void sensor_read(void *pvParameters){
     float temp = 0;
     float hum = 0;
     int status = 0;
-
-    vTaskDelay(pdMS_TO_TICKS(2000));
 
     while(1){
         status = read_dht11(GPIO_NUM_8, &temp, &hum);
@@ -50,7 +60,7 @@ void sensor_read(void *pvParameters){
                 printf("Temp: %.1f C, Hum: %.0f%%\n", temp, hum);
             } 
         } else {printf("Sensor failed, error code: %d\n", status);}
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(10000));
     } 
 }
 
@@ -70,16 +80,6 @@ static void lvgl_touch_cb(lv_indev_t * indev, lv_indev_data_t * data) {
         printf("X: %d, Y: %d\n", point.x, point.y); //remove comment to log coordinates in serial monitor
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
-    }
-}
-
-    //callback for button
-static void btn_event_cb(lv_event_t * e) {
-    lv_obj_t * btn = lv_event_get_target(e);
-    if(lv_event_get_code(e) == LV_EVENT_PRESSED) {
-        lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_GREEN), 0);
-    } else if(lv_event_get_code(e) == LV_EVENT_RELEASED) {
-        lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_BLUE), 0);
     }
 }
 
@@ -103,12 +103,11 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
 // Menu-prototyopes
 void ui_home_screen_init(void);
 void ui_options_screen_init(void);
-//void ui_alarm_screen_init(void); // TO BE ADDED
+void ui_status_screen_init(void);
 
-// ======== SHARED CALLBACKS =========
 static void change_to_options_cb(lv_event_t * e) {
     if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        // Create options and remove home_screen (true = auto_del)
+        // Create options and remove home_screen (true = auto delete)
         ui_options_screen_init();
         lv_screen_load_anim(lv_screen_active(), LV_SCR_LOAD_ANIM_FADE_ON, 200, 0, true);
     }
@@ -116,10 +115,43 @@ static void change_to_options_cb(lv_event_t * e) {
 
 static void change_to_home_cb(lv_event_t * e) {
     if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        // Create home_screen and remove options (true = auto_del)
         ui_home_screen_init();
         lv_screen_load_anim(lv_screen_active(), LV_SCR_LOAD_ANIM_FADE_ON, 200, 0, true);
     }
+} 
+
+static void change_to_status_cb(lv_event_t * e) {
+    if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        ui_status_screen_init();
+        lv_screen_load_anim(lv_screen_active(), LV_SCR_LOAD_ANIM_FADE_ON, 200, 0, true);
+    }
+}
+
+static void update_alarm_ui(void) {
+    if (!alarm_btn || !alarm_label) return;
+    switch (alarm_state) {
+    case ALARM_OFF:
+        lv_label_set_text(alarm_label, "Alarm OFF");
+        lv_obj_set_style_bg_color(alarm_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
+        lv_obj_set_style_bg_color(inside_box, lv_palette_main(LV_PALETTE_GREEN), 0);
+        break;
+    case ALARM_ARMED:
+        lv_label_set_text(alarm_label, "ARMED");
+        lv_obj_set_style_bg_color(alarm_btn, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_obj_set_style_bg_color(inside_box, lv_palette_main(LV_PALETTE_RED), 0);
+        break;
+    /* case ALARM_TRIGGERED: //to be triggered by sensors, uncomment when posible
+        //lv_label_set_text(alarm_label, "TRIGGERED");
+        //lv_obj_set_style_bg_color(alarm_btn, lv_palette_main(LV_PALETTE_RED), 0); 
+        break; */
+    }
+}
+
+static void alarm_toggle_cb(lv_event_t * e) {
+    if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    printf("Alarm state changed to: %d\n", alarm_state);
+    alarm_state = (alarm_state + 1) % 2; //  change  to "% 3" when correct sensors are added
+    update_alarm_ui();
 }
 
 // ====== HOMESCREEN ========
@@ -143,10 +175,10 @@ void ui_home_screen_init(void) {
     lv_obj_align(roof, LV_ALIGN_TOP_RIGHT, 0, 0);
 
     // Inside Box
-    lv_obj_t * inside_box = lv_obj_create(container);
+    inside_box = lv_obj_create(container);
     lv_obj_set_size(inside_box, 140, 100);
     lv_obj_align(inside_box, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
-    lv_obj_set_style_bg_color(inside_box, lv_color_hex(0x352B3A), 0);
+    lv_obj_set_style_bg_color(inside_box, lv_palette_main(LV_PALETTE_GREEN), 0);
     lv_obj_set_style_radius(inside_box, 0, 0);
     lv_obj_set_style_border_width(inside_box, 2, 0);
     lv_obj_set_style_border_color(inside_box, lv_color_white(), 0);
@@ -192,61 +224,127 @@ void ui_home_screen_init(void) {
     lv_obj_align(outside_temp, LV_ALIGN_CENTER, 0, 10);
 
     // buttons
-        // Alarm toggle
-    lv_obj_t * alarm_btn = lv_button_create(scr);
+    // Alarm toggle
+    alarm_btn = lv_button_create(scr);
     lv_obj_set_size(alarm_btn, 80, 25);
     lv_obj_align(alarm_btn, LV_ALIGN_TOP_LEFT, 10, 10);
-    lv_obj_set_style_bg_color(alarm_btn, lv_palette_main(LV_PALETTE_BLUE), 0);
+    lv_obj_set_style_border_width(alarm_btn, 2, 0);
+    lv_obj_set_style_border_color(alarm_btn, lv_color_white(), 0);
 
-    lv_obj_t * alarm_label = lv_label_create(alarm_btn);
-    lv_label_set_text(alarm_label, "Alarm");
+    // Register callback
+    lv_obj_add_event_cb(alarm_btn, alarm_toggle_cb, LV_EVENT_CLICKED, NULL);
+    alarm_label = lv_label_create(alarm_btn);
     lv_obj_align(alarm_label, LV_ALIGN_CENTER, 0, 0);
+    update_alarm_ui();
     
-        // Options
+    // Options
     lv_obj_t * opt_btn = lv_button_create(scr);
     lv_obj_set_size(opt_btn, 80, 25);
     lv_obj_align(opt_btn, LV_ALIGN_BOTTOM_MID, 0, -5);
-    
+    lv_obj_set_style_bg_color(opt_btn, lv_palette_main(LV_PALETTE_GREY), 0);
+
     lv_obj_t * label = lv_label_create(opt_btn);
     lv_label_set_text(label, "Options");
     lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 
+    // Status
+    lv_obj_t * stat_btn = lv_button_create(scr);
+    lv_obj_set_size(stat_btn, 80, 25);
+    lv_obj_align(stat_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -5);
+    lv_obj_set_style_bg_color(stat_btn, lv_palette_main(LV_PALETTE_GREY), 0);
+
+    lv_obj_t * stat_label = lv_label_create(stat_btn);
+    lv_label_set_text(stat_label, "Status");
+    lv_obj_align(stat_label, LV_ALIGN_CENTER, 0, 0);
+
     // Register callback
     lv_obj_add_event_cb(opt_btn, change_to_options_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_set_style_bg_color(opt_btn, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_add_event_cb(stat_btn, change_to_status_cb, LV_EVENT_CLICKED, NULL);
+
     lv_screen_load(scr);
 }
 
 // ======== Settings =======
-void ui_options_screen_init(void) {
+void ui_options_screen_init(void){
     lv_obj_t * scr = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(scr, lv_palette_darken(LV_PALETTE_DEEP_PURPLE, 0), 0); //black
+    lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), 0); //black
 
     lv_obj_t * btn = lv_button_create(scr);
+    lv_obj_set_size(btn, 80, 25);
     lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_AMBER), 0);
-    lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -5);
     
     lv_obj_t * label = lv_label_create(btn);
     lv_label_set_text(label, "Back");
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 
     // Register callback
     lv_obj_add_event_cb(btn, change_to_home_cb, LV_EVENT_CLICKED, NULL);
+    lv_screen_load(scr);
+}
 
+// ====== Status ======
+void ui_status_screen_init(void){
+    lv_obj_t * scr = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), 0); //black
+
+    lv_obj_t * header = lv_label_create(scr);
+    lv_label_set_text(header, "SENSOR STATUS");
+    lv_obj_set_style_text_color(header, lv_color_white(), 0);
+    lv_obj_align(header,LV_ALIGN_TOP_MID, 0, 10);
+
+    lv_obj_t * stat_list = lv_obj_create(scr);
+    lv_obj_set_size(stat_list, 280,  160);
+    lv_obj_align(stat_list, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_flex_flow(stat_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_bg_opa(stat_list, 0, 0);
+    lv_obj_set_style_pad_gap(stat_list, 10, 0);
+
+    lv_obj_t  * row1 = lv_label_create(stat_list);
+    lv_label_set_text(row1, "Temp+Hum (inside): ONLINE");
+    lv_obj_set_style_text_color(row1,  lv_color_white(), 0);
+
+    lv_obj_t  * row2 = lv_label_create(stat_list);
+    lv_label_set_text(row2, "Door (Main): ONLINE");
+    lv_obj_set_style_text_color(row2,  lv_color_white(), 0);
+
+    lv_obj_t  * row3 = lv_label_create(stat_list);
+    lv_label_set_text(row3, "Window (LR): ONLINE");
+    lv_obj_set_style_text_color(row3,  lv_color_white(), 0);
+    
+    lv_obj_t  * row4 = lv_label_create(stat_list);
+    lv_label_set_text(row4, "Leakage (Kitchen): ONLINE");
+    lv_obj_set_style_text_color(row4,  lv_color_white(), 0);
+
+    lv_obj_t * btn = lv_button_create(scr);
+    lv_obj_set_size(btn, 80, 25);
+    lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_AMBER), 0);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -5);
+
+    lv_obj_t * label = lv_label_create(btn);
+    lv_label_set_text(label, "Back");
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+
+    // Register callback
+    lv_obj_add_event_cb(btn, change_to_home_cb, LV_EVENT_CLICKED, NULL);
     lv_screen_load(scr);
 }
 
 static void lvgl_port_task(void *arg) {
     // Wait here until app_main says it's okay to start
-    while (!hardware_ready) {
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-
     ui_home_screen_init(); 
-
+    bl_pwm_init();
     while (1) {
         uint32_t time_till_next = lv_timer_handler();
         lv_tick_inc(10); 
         
+        uint32_t idle_time = lv_display_get_inactive_time(NULL); // Returns ms
+        if (idle_time > 5000) { // 5s of inactivity
+            set_bl_brightness(1); // Dim to 5%
+        } else {
+            set_bl_brightness(50); // 50% as standard
+        }
+
         if (time_till_next < 1) time_till_next = 1;
         if (time_till_next > 50) time_till_next = 50;
         
@@ -342,7 +440,7 @@ void app_main() {
         .flags = {
             .swap_xy = 1,  // Swap touch axis to match display
             .mirror_x = 0, // Toggle to 1 if left/right is backwards
-            .mirror_y = 0, // Toggle to 0 if up/down is backwards
+            .mirror_y = 1, // Toggle to 0 if up/down is backwards
         },
     };
     ESP_ERROR_CHECK(esp_lcd_touch_new_spi_xpt2046(tp_io_handle, &tp_cfg, &touch_handle));
