@@ -1,7 +1,7 @@
 #include <stdio.h>
-#include "lcd_config.h"  
-#include "lcd_ui.h"    
-#include "led_pwm.h"
+#include "disp_config.h"  
+#include "disp_ui.h"    
+#include "disp_led_pwm.h"
 #include "alarmManager.h"
 #include "lvgl.h"
 #include "freertos/FreeRTOS.h"

@@ -1,6 +1,6 @@
-#include "lcd_config.h"      
+#include "disp_config.h"      
 #include "lvgl.h"
-#include "lcd_ui.h" // Din egen header
+#include "disp_ui.h" // Din egen header
 #include <stdio.h>
 #include "esp_lcd_ili9341.h" 
 #include "esp_lcd_panel_vendor.h"

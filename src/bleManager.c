@@ -111,7 +111,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
 
             if (event->notify_rx.indication == 1) {
                 if (rc == 0){
-                    ESP_LOGI(TAG, "Indicate mottaget! -> Data: %d, Tid: %d", alarmInfo.trigger, alarmInfo.time);
+                    //ESP_LOGI(TAG, "Indicate mottaget! -> Data: %d, Tid: %d", alarmInfo.trigger, alarmInfo.time);
                 }
                 // skickar larmet in i larmkön
                 if (alarmQueue != NULL){

@@ -10,12 +10,12 @@ AlarmInfo alarmInfo =  {NONE, 0};
 
 void vAlarmReceiveTask(void* params){
     // lokal "behållare" för värdet som tas emot från kön.
-    int val;
 
     for (;;){
         // vänta här - tills något finns i kön.. -> (kopigera då in värdet i 'val')
-        if (xQueueReceive(alarmQueue, &val, portMAX_DELAY)){
-            ESP_LOGI("ALARM", "Värde mottaget: %d", val);
+        if (xQueueReceive(alarmQueue, &alarmInfo, portMAX_DELAY)){
+            ESP_LOGI("SensorNode", "Data: %d", alarmInfo.trigger);
+            ESP_LOGI("SensorNode", "Tid: %d", alarmInfo.time);
         }
     }
 }
