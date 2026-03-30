@@ -391,11 +391,11 @@
     void app_main() {
 
         // skapa larm kö
-        alarmQueue = xQueueCreate(10, sizeof(int));
+        alarmQueue = xQueueCreate(10, sizeof(AlarmInfo));
         initBLE();
 
         // Skapa RTOS tasks..
-        xTaskCreatePinnedToCore(vBLETask, "BLE_HOST", 8192, NULL, 5, NULL, 0);          // CORE 0: För BLE task (ska ej ha 'TaskDelay')
+        xTaskCreatePinnedToCore(vBLETask, "BLE_HOST", 8192, NULL, 3, NULL, 0);          // CORE 0: För BLE task (ska ej ha 'TaskDelay')
         xTaskCreatePinnedToCore(vAlarmReceiveTask, "ALARM", 4096, NULL, 4, NULL, 0);    // CORE 1: För larmlogik (OBS: ej på H2, har bara en kärna)
         //xTaskCreatePinnedToCore(vWiFiTask, "WIFI_MQTT", 8192, NULL, 3, NULL, 0);      // CORE 0: För WiFi + MQTT
         
