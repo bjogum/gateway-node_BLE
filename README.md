@@ -1,4 +1,3 @@
-@@ -0,0 +1,7 @@
 * **Activate BLE**
   * pio run -t menuconfig 
     *  Component config → Bluetooth (space *)
