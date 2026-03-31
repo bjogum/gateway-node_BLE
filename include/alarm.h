@@ -3,6 +3,8 @@
 #include <stdint.h> 
 
 void vAlarmReceiveTask(void* params);
+void manageAlarm();
+void setAlarm();
 
 // ======= SYSTEM STATUS =======
 typedef enum
@@ -18,7 +20,7 @@ typedef struct {
     bool mqttIsActive;
 }ConnectionStatus;
 
-// ======= ALARM TRIGGER STATES =======
+// ======= ALARM INFO::TRIGGERS =======
 typedef enum : uint8_t
 {
     NONE = 0,       // = Heartbeat
@@ -29,7 +31,7 @@ typedef enum : uint8_t
 }AlarmTrigger;
 
 
-// ======= ALARM INFO =======
+// ======= ALARM INFO (Rx) =======
 // packad strukt, ta emot larm. [Från Arduino eller Zero]
 typedef struct __attribute__((packed))
 {
@@ -47,29 +49,28 @@ typedef enum
     STATE_ARMED_AWAY
 }AlarmState; //alarm_state_t; (ändra!)
 
-
-// ======= ALARM STATUS =======
-typedef enum
+typedef struct
 {
-    FAIL,       // Felläge
-    IDLE,       // Normalläge
-    PENDING,    // Ex. dörr öppnad - på väg att larma av (pip-ljud för uppmärksamhet) - efter 30s går larm.
-    ALARMING    // Larmar!
-}AlarmStatus;
+    bool ALARM_INTRUSION;     // Larmar, inbrott
+    bool ALARM_FIRE;        // Larmar, brand
+    bool ALARM_WATER;
+}AlarmingStatus;
+
 
 // ======= WETHER API =======
 typedef struct{
     float API_temp;
     float API_humid;
     char API_description[100]; 
-}OpenWether;
+}OpenMeteo;
+
 
 // ======= SENSOR DATA =======
 typedef struct
 {
     float indoorTemp;
     float indoorHumidity;
-    OpenWether openWether;
+    OpenMeteo wether;
 }SensorData;
 
 
@@ -80,8 +81,8 @@ typedef struct
 {
     RunStatus runStatus;                // WAKING_UP | RUNNING --> (används ej än)
     ConnectionStatus connectionStatus;  // WiFi Active? | BLE Active? | MQTT Active?
-    AlarmState alarmState;              // STATE_DISARMED | STATE_ARMED_HOME | STATE_ARMED_AWAY
-    AlarmStatus alarmStatus;            // FAIL | IDLE | PENDING | ALARMING
+    AlarmState systemState;              // STATE_DISARMED | STATE_ARMED_HOME | STATE_ARMED_AWAY
+    AlarmingStatus alarmStatus;            // FAIL | IDLE | PENDING | ALARMING
     SensorData sensorData;              // API 'OpenWether' & DHT11
     volatile unsigned long sysTime;     // System-tiden
 }System;
