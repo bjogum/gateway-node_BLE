@@ -69,6 +69,9 @@ void manageAlarm(){
     if (node.alarmStatus.ALARM_FIRE){       // hög prio
         buzzer_on_fire();
         // Visuellt: Tydligt i display
+        // Ljud: högt-tätt pip ?
+
+        // SKICKA (Tx):
         // broker -> DB
         // thingsboard ?
 
@@ -80,6 +83,9 @@ void manageAlarm(){
     if (node.alarmStatus.ALARM_INTRUSION){  // mellan prio
         buzzer_on_intrusion();
         // Visuellt: Tydligt i display
+        // Ljud: hög siren ?
+
+        // SKICKA (Tx):
         // broker -> DB
         // thingsboard ?
 
@@ -88,8 +94,10 @@ void manageAlarm(){
     }
 
         if (node.alarmStatus.ALARM_WATER){  // låg prio
-        // Visuellt: Syns i display
-        // info i display ?
+        // Visuellt: Info i display
+        // Ljud: Lätt pip
+
+        // SKICKA (Tx):
         // broker -> DB
         // thingsboard ?
 
