@@ -9,8 +9,8 @@
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
 #include "services/gap/ble_svc_gap.h"
-#include "bleManager.h"
-#include "alarmManager.h"
+#include "ble_manager.h"
+#include "alarm.h"
 
 uint8_t ble_addr_type;
 static const char *TAG = "BLE_CLIENT";

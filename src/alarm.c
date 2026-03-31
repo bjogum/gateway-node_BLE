@@ -3,10 +3,32 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "esp_log.h"
-#include "bleManager.h" 
-#include "alarmManager.h"
+#include "ble_manager.h" 
+#include "alarm.h"
 
 AlarmInfo alarmInfo =  {NONE, 0};
+
+System node = {
+    .runStatus = WAKING_UP,
+    .connectionStatus = {
+    .wifiIsActive = false,
+    .bleIsActive = false,
+    .mqttIsActive = false,
+  },
+    .alarmState = STATE_DISARMED,
+    .alarmStatus = IDLE,
+    .sensorData = {
+    .indoorHumidity = 0.0,
+    .indoorTemp = 0.0,
+    .openWether = {
+        .API_description = {0},
+        .API_humid = 0.0,
+        .API_temp = 0.0,
+        },
+    },
+    .sysTime = 0,
+};
+
 
 void vAlarmReceiveTask(void* params){
     // lokal "behållare" för värdet som tas emot från kön.

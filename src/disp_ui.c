@@ -2,13 +2,11 @@
 #include "disp_config.h"  
 #include "disp_ui.h"    
 #include "disp_led_pwm.h"
-#include "alarmManager.h"
+#include "alarm.h"
 #include "lvgl.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"    
-
-static alarm_state_t alarm_state = STATE_DISARMED; // default OFF.
 
 lv_obj_t * inside_box = NULL;
 lv_obj_t * inside_temp  = NULL;
@@ -56,7 +54,7 @@ static void change_to_status_cb(lv_event_t * e) {
     
 static void update_alarm_ui(void) {
     if (!alarm_btn || !alarm_label) return;
-    switch (alarm_state) {
+    switch (node.alarmState) {
     case STATE_DISARMED:
         lv_label_set_text(alarm_label, "DISARMED");
         lv_obj_set_style_bg_color(alarm_btn, lv_palette_main(LV_PALETTE_GREEN), 0);
@@ -75,8 +73,8 @@ static void update_alarm_ui(void) {
 }
 static void alarm_toggle_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
-    printf("Alarm state changed to: %d\n", alarm_state);
-    alarm_state = (alarm_state + 1) % 2; //  change  to "% 3" when correct sensors are added
+    printf("Alarm state changed to: %d\n", node.alarmState);
+    //node.alarmState = (alarm_state + 1) % 2; //  change  to "% 3" when correct sensors are added <------ Behöver uppdateras!
     update_alarm_ui();
 }
 // ====== HOMESCREEN ========

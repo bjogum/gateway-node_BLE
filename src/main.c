@@ -3,8 +3,8 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"             // För xQueueSend / xQueueReceive
 #include "disp_led_pwm.h"
-#include "bleManager.h"
-#include "alarmManager.h"
+#include "ble_manager.h"
+#include "alarm.h"
 #include "disp_config.h"
 #include "disp_ui.h"
 
