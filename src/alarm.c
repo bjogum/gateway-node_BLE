@@ -37,10 +37,11 @@ System node = {
         },
     },
     .sysTime = 0,
+    .buzzer = false
 };
 
 
-void vAlarmReceiveTask(void* params){
+void vReceiveAlarmTask(void* params){
     // lokal "behållare" för värdet som tas emot från kön.
     buzzer_init();
     
@@ -50,23 +51,38 @@ void vAlarmReceiveTask(void* params){
             ESP_LOGI("SensorNode", "Data: %d", alarmInfo.trigger);
             ESP_LOGI("SensorNode", "Time: %d", alarmInfo.time);
 
-            if (alarmInfo.trigger != NONE) {
-                manageAlarm(); 
-            } else {
-                if (node.alarmStatus.ALARM_FIRE || node.alarmStatus.ALARM_WATER){ // node.alarmStatus.ALARM_INTRUSION kommer inaktiveras aktivt.
-                    checkIfReset();
-                }
+            // Om skarpt larm -> lämna över till AlarmManagerTask + Yield
+            if (alarmInfo.trigger != NONE){
+                xSemaphoreGive(xAlarmSemaphore);
+                taskYIELD();
             }
         }
-        //vTaskDelay ..
+        vTaskDelay(pdMS_TO_TICKS(100)); // behövs?
     }
 }
 
+
+void vAlarmManagerTask(void* params){
+
+    for (;;){
+        BaseType_t xResult = xSemaphoreTake(xAlarmSemaphore, pdMS_TO_TICKS(2000));
+
+        if (xResult) { 
+            // BARA vid semafor
+            manageAlarm(); 
+        } else {
+            // BARA vid timeout
+            checkIfReset();
+        }
+        vTaskDelay(pdMS_TO_TICKS(20)); // behövs?
+    }
+}
 
 //void alarmSendState(){
     // skickar till arudino: 0,1,2 (STATE_DISARMED, STATE_ARMED_AWAY, STATE_ARMED_HOME)
 
 //}
+
 
 void manageAlarm(){
     // bestäm hur vi ska aggera, beroende på larm.
@@ -75,7 +91,8 @@ void manageAlarm(){
     setAlarm();
 
     // agerar på larm-status
-    if (node.alarmStatus.ALARM_FIRE){       // hög prio
+
+    if (node.alarmStatus.ALARM_FIRE){       // högsta prio
         triggerFireAlarmTime = systemTime;
         buzzer_on_fire();
         // Visuellt: Tydligt i display
@@ -90,7 +107,7 @@ void manageAlarm(){
         // via resetAlarm(); 
     }
 
-    if (node.alarmStatus.ALARM_INTRUSION){  // mellan prio
+    if (node.alarmStatus.ALARM_INTRUSION && !node.alarmStatus.ALARM_FIRE){  // mellan prio
         buzzer_on_intrusion();
         // Visuellt: Tydligt i display
         // Ljud: hög siren ?
@@ -103,8 +120,8 @@ void manageAlarm(){
         // inaktiveras när larm inaktiveras av användare - via resetAlarm();
     }
 
-    if (node.alarmStatus.ALARM_WATER){  // låg prio
-        triggerFireAlarmTime = systemTime;
+    if (node.alarmStatus.ALARM_WATER && !node.alarmStatus.ALARM_INTRUSION && !node.alarmStatus.ALARM_FIRE){  // låg prio
+        triggerWaterAlarmTime = systemTime;
         // Visuellt: Info i display
         // Ljud: Lätt pip
 
@@ -145,19 +162,29 @@ void setAlarm(){
 void checkIfReset(){
     // reset för brand & vatten (tidsbaserat)
 
-
     // om det gått mer än 8s sen brandlarm mottogs -> Reset
-    if (systemTime - triggerFireAlarmTime >= FIRE_ALARM_RESET_TIME){
+    if (systemTime - triggerFireAlarmTime >= FIRE_ALARM_RESET_TIME && node.alarmStatus.ALARM_FIRE == true){
         
         // RESET
+        ESP_LOGI("RESET", "FIRE_ALARM");
         node.alarmStatus.ALARM_FIRE = false;
-        buzzer_off(); // <------- bara för test (OBS! får bara stängas av om nån annan inte använder summern..)
     }
 
     // om det gått mer än 35s? sen vatten-läckage mottogs -> Reset
-    if (systemTime - triggerWaterAlarmTime >= WATER_ALARM_RESET_TIME){
+    if (systemTime - triggerWaterAlarmTime >= WATER_ALARM_RESET_TIME && node.alarmStatus.ALARM_WATER == true){
         
         // RESET
+        ESP_LOGI("RESET", "WATER_ALARM");
         node.alarmStatus.ALARM_WATER = false;
+    }
+
+
+    if (node.alarmStatus.ALARM_FIRE == false && node.alarmStatus.ALARM_INTRUSION == false && node.alarmStatus.ALARM_WATER == false){
+        
+        if (node.buzzer){
+            ESP_LOGI("RESET", "BUZZER");
+            buzzer_off();
+        }
+        
     }
 }

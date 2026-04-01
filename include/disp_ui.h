@@ -9,6 +9,7 @@ extern lv_obj_t * inside_temp;
 extern lv_obj_t * inside_humid;
 extern SemaphoreHandle_t xGuiSemaphore;
 extern QueueHandle_t sensor_queue;
+extern SemaphoreHandle_t xGuiSemaphore;
 
 // 2. Funktioner som main ska anropa
 void disp_UI_init(void);

@@ -1,4 +1,7 @@
 #include "driver/ledc.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "alarm.h"
 
 // DISPLAY BACKGROUND LIGHT
 #define LCD_BL_GPIO           3
@@ -51,7 +54,7 @@ void buzzer_init(){
     .speed_mode       = BUZZER_MODE,
     .timer_num        = BUZZER_TIMER,
     .duty_resolution  = LEDC_TIMER_13_BIT,
-    .freq_hz          = 2000,
+    .freq_hz          = 3000,
     .clk_cfg          = LEDC_AUTO_CLK
   };
   ledc_timer_config(&buzzerTimer);
@@ -71,20 +74,37 @@ void buzzer_init(){
 
 // skrik
 void buzzer_on_fire() {
-    // 1. Sätt duty cycle till 50% (4095)
-    ledc_set_duty(BUZZER_MODE, BUZZER_CHANNEL, 3000);
-    
-    // 2. Säg till hårdvaran att verkställa ändringen
-    ledc_update_duty(BUZZER_MODE, BUZZER_CHANNEL);
+  node.buzzer = true;
+
+  // sätter freqvensen (tonhöjden)
+  ledc_set_freq(BUZZER_MODE, BUZZER_CHANNEL, 2000);
+
+  // sätter "volymen"
+  ledc_set_duty(BUZZER_MODE, BUZZER_CHANNEL, 4096);
+  ledc_update_duty(BUZZER_MODE, BUZZER_CHANNEL);
+
 }
+
 
 // skrik
 void buzzer_on_intrusion() {
-    // 1. Sätt duty cycle till 50% (4095)
-    ledc_set_duty(BUZZER_MODE, BUZZER_CHANNEL, 3000);
-    
-    // 2. Säg till hårdvaran att verkställa ändringen
-    ledc_update_duty(BUZZER_MODE, BUZZER_CHANNEL);
+  node.buzzer = true;
+  
+  while (1) {
+      // Svep uppåt (från 600Hz till 1200Hz)
+      for (int freq = 600; freq < 1200; freq += 10) {
+          ledc_set_freq(BUZZER_MODE, BUZZER_TIMER, freq);
+          vTaskDelay(pdMS_TO_TICKS(10)); // hastigheten på svepet
+      }
+
+      // Svep nedåt (från 1200Hz till 600Hz)
+      for (int freq = 1200; freq > 600; freq -= 10) {
+          ledc_set_freq(BUZZER_MODE, BUZZER_TIMER, freq);
+          vTaskDelay(pdMS_TO_TICKS(10)); // // hastigheten på svepet
+      }
+  }
+
+  
 }
 
 // tyst
@@ -94,6 +114,8 @@ void buzzer_off() {
     
     // 2. Säg till hårdvaran att verkställa ändringen
     ledc_update_duty(BUZZER_MODE, BUZZER_CHANNEL);
+
+    node.buzzer = false;
 }
 
 

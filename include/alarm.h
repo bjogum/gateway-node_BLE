@@ -5,10 +5,14 @@
 #define GET_SYS_TIME_MS() (pdTICKS_TO_MS(xTaskGetTickCount()))
 #define systemTime (pdTICKS_TO_MS(xTaskGetTickCount()))
 
-void vAlarmReceiveTask(void* params);
+void vReceiveAlarmTask(void* params);
+void vAlarmManageerTask(void* params);
+void vAlarmManagerTask(void* params);
 void manageAlarm();
 void setAlarm();
 void checkIfReset();
+extern SemaphoreHandle_t xAlarmSemaphore;
+extern QueueHandle_t alarmQueue;
 
 // ======= SYSTEM STATUS =======
 typedef enum
@@ -85,10 +89,11 @@ typedef struct
 {
     RunStatus runStatus;                // WAKING_UP | RUNNING --> (används ej än)
     ConnectionStatus connectionStatus;  // WiFi Active? | BLE Active? | MQTT Active?
-    AlarmState systemState;              // STATE_DISARMED | STATE_ARMED_HOME | STATE_ARMED_AWAY
-    AlarmingStatus alarmStatus;            // FAIL | IDLE | PENDING | ALARMING
+    AlarmState systemState;             // STATE_DISARMED | STATE_ARMED_HOME | STATE_ARMED_AWAY
+    AlarmingStatus alarmStatus;         // FAIL | IDLE | PENDING | ALARMING
     SensorData sensorData;              // API 'OpenWether' & DHT11
     volatile unsigned long sysTime;     // System-tiden
+    bool buzzer;                        // Is buzzer: On or Off
 }System;
 
 // deklarera variabel för systemet

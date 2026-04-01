@@ -9,13 +9,15 @@
 #include "disp_ui.h"
 
 //QueueHandle_t sensor_queue = NULL;
+SemaphoreHandle_t xAlarmSemaphore;
+SemaphoreHandle_t xGuiSemaphore; 
 QueueHandle_t alarmQueue;
-SemaphoreHandle_t xGuiSemaphore = NULL;
 
 void app_main() {
-    
+
     // skapa larm kö
     alarmQueue = xQueueCreate(10, sizeof(AlarmInfo));
+    xAlarmSemaphore = xSemaphoreCreateBinary();
     xGuiSemaphore = xSemaphoreCreateMutex();
     //sensor_queue = xQueueCreate(5, sizeof(sensor_data_t)); // Om du har en sensor-kö
 
@@ -25,10 +27,11 @@ void app_main() {
 
     // Skapa RTOS tasks..
     xTaskCreatePinnedToCore(vBLETask, "BLE_HOST", 8192, NULL, 3, NULL, 0);          // CORE 0: För BLE task (ska ej ha 'TaskDelay')
-    xTaskCreatePinnedToCore(vAlarmReceiveTask, "ALARM", 4096, NULL, 4, NULL, 0);    // CORE 1: För larmlogik (OBS: ej på H2, har bara en kärna)
-    //xTaskCreatePinnedToCore(vWiFiTask, "WIFI_MQTT", 8192, NULL, 3, NULL, 0);      // CORE 0: För WiFi + MQTT
-    
-    xTaskCreate(lvgl_port_task, "LVGL", 1024 * 16, NULL, 5, NULL);
+    xTaskCreatePinnedToCore(vReceiveAlarmTask, "Rx_ALARM", 4096, NULL, 4, NULL, 0); // CORE 0: För 
+    //xTaskCreatePinnedToCore(vWiFiTask, "WIFI_MQTT", 8192, NULL, 1, NULL, 0);      // CORE 0: För WiFi + MQTT
+    xTaskCreatePinnedToCore(vAlarmManagerTask, "ALARM", 4096, NULL, 5, NULL, 1);      // CORE 1: För larmlogik (OBS: ej på H2, har bara en kärna)
+
+    xTaskCreate(lvgl_port_task, "LVGL", 1024 * 16, NULL, 2, NULL);
     //xTaskCreate(sensor_read, "DHT11_Task", 1024 * 4, NULL, 2, NULL);
     
     vTaskDelete(NULL);
