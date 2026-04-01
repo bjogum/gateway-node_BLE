@@ -8,7 +8,9 @@
 #include "gpio.h"
 #define FIRE_ALARM_RESET_TIME 8000
 #define WATER_ALARM_RESET_TIME 35000
+#define HEARTBEAT_BLE_INTERVALL 5000
 
+int lastHeartbeatTime = -1;
 int triggerFireAlarmTime;
 int triggerWaterAlarmTime;
 
@@ -55,6 +57,9 @@ void vReceiveAlarmTask(void* params){
             if (alarmInfo.trigger != NONE){
                 xSemaphoreGive(xAlarmSemaphore);
                 taskYIELD();
+            } else {
+                ESP_LOGI("SensorNode", "Heartbeat..");
+                lastHeartbeatTime = systemTime;
             }
         }
         vTaskDelay(pdMS_TO_TICKS(100)); // behövs?
@@ -73,6 +78,11 @@ void vAlarmManagerTask(void* params){
         } else {
             // BARA vid timeout
             checkIfReset();
+            if (lastHeartbeatTime >= 0){
+                checkHeartbeat();
+            }
+            
+            
         }
         vTaskDelay(pdMS_TO_TICKS(20)); // behövs?
     }
@@ -186,5 +196,23 @@ void checkIfReset(){
             buzzer_off();
         }
         
+    }
+}
+
+
+void checkHeartbeat(){
+    
+    if (systemTime - lastHeartbeatTime >= HEARTBEAT_BLE_INTERVALL * 4){ // SensorNode tappar heartbeat vid MQTT fail...kan dröja 15s.
+        
+        if (node.systemState != STATE_DISARMED){
+            // LARMA
+            node.alarmStatus.ALARM_INTRUSION = true;
+            // info/notis i display -> 'FAIL SAFE'
+
+        } else {
+            ESP_LOGI("HEARTBEAT", "FAIL");
+            // kort PIP-PIP (samma som water leak..)
+            // info/notis i display -> 'FAIL SAFE'
+        }
     }
 }

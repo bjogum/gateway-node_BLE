@@ -11,6 +11,7 @@ void vAlarmManagerTask(void* params);
 void manageAlarm();
 void setAlarm();
 void checkIfReset();
+void checkHeartbeat();
 extern SemaphoreHandle_t xAlarmSemaphore;
 extern QueueHandle_t alarmQueue;
 
