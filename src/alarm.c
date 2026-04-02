@@ -42,6 +42,7 @@ System node = {
     .buzzer = false
 };
 
+// void vSendAlarmStateTask
 
 void vReceiveAlarmTask(void* params){
     // lokal "behållare" för värdet som tas emot från kön.
