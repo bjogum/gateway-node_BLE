@@ -10,6 +10,7 @@ void vBLETask(void *param);
 void ble_app_scan(void);
 void ble_app_on_sync(void);
 void initBLE();
+void set_alarmState(AlarmState state);
 
 
 #endif

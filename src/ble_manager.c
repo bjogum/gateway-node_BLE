@@ -15,15 +15,22 @@
 uint8_t ble_addr_type;
 static const char *TAG = "BLE_CLIENT";
 
-// UUID:s för Arduino (SENS_NODE) - 128-bitars i Little Endian
+// Service UUID (Huset) - slutar på ...00
 static const ble_uuid128_t remote_service_uuid = {
     .u = {.type = BLE_UUID_TYPE_128},
     .value = {0x14, 0x12, 0x8A, 0x76, 0x04, 0xD1, 0x6C, 0x4F, 0x7E, 0x53, 0xF2, 0xE8, 0x00, 0x00, 0xB1, 0x19}
 };
 
+// Alarming UUID (från Arduino) - slutar på ...01
 static const ble_uuid128_t remote_char_uuid = {
     .u = {.type = BLE_UUID_TYPE_128},
     .value = {0x14, 0x12, 0x8A, 0x76, 0x04, 0xD1, 0x6C, 0x4F, 0x7E, 0x53, 0xF2, 0xE8, 0x01, 0x00, 0xB1, 0x19}
+};
+
+// Alarm-state UUID (till Arduino) - slutar på ...02
+static const ble_uuid128_t remote_write_char_uuid = {
+    .u = {.type = BLE_UUID_TYPE_128},
+    .value = {0x14, 0x12, 0x8A, 0x76, 0x04, 0xD1, 0x6C, 0x4F, 0x7E, 0x53, 0xF2, 0xE8, 0x02, 0x00, 0xB1, 0x19}
 };
 
 
@@ -55,12 +62,21 @@ void vBLETask(void *param) {
 }
 
 
-// Callback när Characteristic hittas -> Aktivera Notify (skriv till CCCD)
+// Callback när Characteristic hittas..
 static int on_char_disc(uint16_t conn_handle, const struct ble_gatt_error *error, const struct ble_gatt_chr *chr, void *arg) {
     if (error->status == 0) {
-        ESP_LOGI(TAG,"Aktiverar INDICATE för larmet...\n");
-        uint8_t value[] = {0x02, 0x00}; // 0x02 = Indicate
-        ble_gattc_write_flat(conn_handle, chr->val_handle + 1, value, sizeof(value), NULL, NULL);
+        // 1. Kolla om detta är LARM-dörren (slutar på 01)
+        if (ble_uuid_cmp(&chr->uuid.u, &remote_char_uuid.u) == 0) {
+            ESP_LOGI(TAG, "Hittade LARM-dörr. Aktiverar INDICATE...");
+            uint8_t value[] = {0x02, 0x00};
+            ble_gattc_write_flat(conn_handle, chr->val_handle + 1, value, sizeof(value), NULL, NULL);
+        }
+        
+        // 2. Kolla om detta är STATUS-dörren (slutar på 02)
+        else if (ble_uuid_cmp(&chr->uuid.u, &remote_write_char_uuid.u) == 0) {
+            ESP_LOGI(TAG, "Hittade STATUS-dörr (Handle: %d). Sparar för sändning.", chr->val_handle);
+            node.connectionStatus.bleRemoteWriteHandle = chr->val_handle;
+        }
     }
     return 0;
 }
@@ -68,8 +84,8 @@ static int on_char_disc(uint16_t conn_handle, const struct ble_gatt_error *error
 // Callback när Service hittas -> Sök efter Characteristic UUID
 static int on_service_disc(uint16_t conn_handle, const struct ble_gatt_error *error, const struct ble_gatt_svc *service, void *arg) {
     if (error->status == 0) {
-        ESP_LOGI(TAG, "Hittade Service! Söker efter Characteristic...\n");
-        ble_gattc_disc_chrs_by_uuid(conn_handle, service->start_handle, service->end_handle, &remote_char_uuid.u, on_char_disc, NULL);
+        ESP_LOGI(TAG, "Hittade Service! Söker efter ALLA Characteristics...\n");
+        ble_gattc_disc_all_chrs(conn_handle, service->start_handle, service->end_handle, on_char_disc, NULL);
     }
     return 0;
 }
@@ -78,7 +94,6 @@ static int on_service_disc(uint16_t conn_handle, const struct ble_gatt_error *er
 static int ble_gap_event(struct ble_gap_event *event, void *arg) {
     struct ble_hs_adv_fields fields;
     int rc;
-
     switch (event->type) {
         case BLE_GAP_EVENT_DISC:
             rc = ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data);
@@ -97,6 +112,10 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
 
         case BLE_GAP_EVENT_CONNECT:
             if (event->connect.status == 0) {
+
+                node.connectionStatus.bleConnHandle = event->connect.conn_handle;
+                node.connectionStatus.bleIsActive = true; // <<-------------  Rätt plats att sätta denna??
+
                 ESP_LOGI(TAG, "ANSLUTEN! Startar discovery...\n"); 
                 ble_gattc_disc_svc_by_uuid(event->connect.conn_handle, &remote_service_uuid.u, on_service_disc, NULL);
             } else {
@@ -123,6 +142,11 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
             break;
 
         case BLE_GAP_EVENT_DISCONNECT:
+
+            node.connectionStatus.bleConnHandle = -1;
+            node.connectionStatus.bleRemoteWriteHandle = -1;
+            node.connectionStatus.bleIsActive = false; // <<-------------  Rätt plats att sätta denna??
+
             ESP_LOGI(TAG, "Frånkopplad. Startar om scanning...\n");
             ble_app_scan();
             break;
@@ -153,4 +177,28 @@ void ble_app_on_sync(void) {
     printf("NimBLE synkad! Bestämmer adress...\n");
     ble_hs_id_infer_auto(0, &ble_addr_type);
     ble_app_scan();
+}
+
+// skickar alarm-state till sensor node: | Disarmed=0 | Armed home=1 | Armed away=2 |
+void set_alarmState(AlarmState state){
+    
+    // sätter state
+    node.systemState = state;
+
+    // skickar state
+    if (node.connectionStatus.bleConnHandle != -1 && node.connectionStatus.bleRemoteWriteHandle != -1){
+        uint8_t val = (uint8_t)state; // säkerställer till 1 byte
+        int rc = ble_gattc_write_flat(
+            node.connectionStatus.bleConnHandle,
+            node.connectionStatus.bleRemoteWriteHandle,
+            &val, sizeof(uint8_t), NULL, NULL);
+    
+        if (!rc){
+            ESP_LOGI(TAG, "Alarm-state skickat - State: %d", val);
+        } else {
+            ESP_LOGE(TAG, "Kunde inte skicka alarm-state! Felkod: %d", rc);
+        }
+    } else {
+        ESP_LOGW(TAG, "BLE inte syncad! Kunde inte skicka alarm-state");
+        }
 }

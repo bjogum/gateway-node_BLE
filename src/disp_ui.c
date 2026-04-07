@@ -6,7 +6,8 @@
 #include "lvgl.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h"    
+#include "freertos/queue.h"  
+#include "ble_manager.h"  
 
 lv_obj_t * inside_box = NULL;
 lv_obj_t * inside_temp  = NULL;
@@ -71,8 +72,10 @@ static void update_alarm_ui(void) {
         break;
     }
 }
+
 static void alarm_toggle_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    setAlarmState(STATE_ARMED_AWAY);                    // <<------------ !! JUST FOR TEST !! <<------------
     printf("Alarm state changed to: %d\n", node.systemState);
     //node.alarmState = (alarm_state + 1) % 2; //  change  to "% 3" when correct sensors are added <------ Behöver uppdateras!
     update_alarm_ui();

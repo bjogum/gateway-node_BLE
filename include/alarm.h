@@ -26,6 +26,8 @@ typedef enum
 typedef struct {
     bool wifiIsActive;
     bool bleIsActive;
+    int bleConnHandle;          // "Hus" -> to use for SEND & RECEIVE (BLE)
+    int bleRemoteWriteHandle;   // "Dörr" -> to use for SENDING alarm state (BLE)
     bool mqttIsActive;
 }ConnectionStatus;
 
@@ -53,9 +55,9 @@ extern AlarmInfo alarmInfo;
 // ======= ALARM STATE =======
 typedef enum
 {
-    STATE_DISARMED,
-    STATE_ARMED_HOME,
-    STATE_ARMED_AWAY
+    STATE_DISARMED = 0,
+    STATE_ARMED_HOME = 1,
+    STATE_ARMED_AWAY = 2
 }AlarmState; //alarm_state_t; (ändra!)
 
 typedef struct

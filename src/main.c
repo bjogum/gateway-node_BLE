@@ -26,9 +26,9 @@ void app_main() {
     initBLE();
 
     // Skapa RTOS tasks..
-    xTaskCreatePinnedToCore(vBLETask, "BLE_HOST", 8192, NULL, 3, NULL, 0);          // CORE 0: För BLE task (ska ej ha 'TaskDelay')
-    xTaskCreatePinnedToCore(vReceiveAlarmTask, "Rx_ALARM", 4096, NULL, 4, NULL, 0); // CORE 0: För 
-    //xTaskCreatePinnedToCore(vWiFiTask, "WIFI_MQTT", 8192, NULL, 1, NULL, 0);      // CORE 0: För WiFi + MQTT
+    xTaskCreatePinnedToCore(vBLETask, "BLE_HOST", 8192, NULL, 3, NULL, 0);            // CORE 0: För BLE task (ska ej ha 'TaskDelay')
+    xTaskCreatePinnedToCore(vReceiveAlarmTask, "Rx_ALARM", 4096, NULL, 4, NULL, 0);   // CORE 0: För 
+    //xTaskCreatePinnedToCore(vWiFiTask, "WIFI_MQTT", 8192, NULL, 1, NULL, 0);        // CORE 0: För WiFi + MQTT
     xTaskCreatePinnedToCore(vAlarmManagerTask, "ALARM", 4096, NULL, 5, NULL, 1);      // CORE 1: För larmlogik (OBS: ej på H2, har bara en kärna)
 
     xTaskCreate(lvgl_port_task, "LVGL", 1024 * 16, NULL, 2, NULL);

@@ -21,6 +21,8 @@ System node = {
     .connectionStatus = {
         .wifiIsActive = false,
         .bleIsActive = false,
+        .bleConnHandle = -1,
+        .bleRemoteWriteHandle = -1,
         .mqttIsActive = false,
     },
     .systemState = STATE_DISARMED,
