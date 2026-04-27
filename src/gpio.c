@@ -80,7 +80,7 @@ void buzzer_on_fire() {
   ledc_set_freq(BUZZER_MODE, BUZZER_CHANNEL, 2000);
 
   // sätter "volymen"
-  ledc_set_duty(BUZZER_MODE, BUZZER_CHANNEL, 4096);
+  ledc_set_duty(BUZZER_MODE, BUZZER_CHANNEL, 1000); //4096 standard
   ledc_update_duty(BUZZER_MODE, BUZZER_CHANNEL);
 
 }

@@ -77,6 +77,7 @@ void vReceiveDataTask(void* params){
                 node.sensorData.indoorTemp = (float)(alarmInfo.climate.inTemp/100.0f);
                 node.sensorData.indoorHumidity = (float)(alarmInfo.climate.inHum/100.0f);
                 ESP_LOGI("SensorNode", "Indoor Temp: %.1f", node.sensorData.indoorTemp);
+                ESP_LOGI("SensorNode", "Indoor Humidity: %.1f%%", node.sensorData.indoorHumidity);
             }
         }
         //vTaskDelay(pdMS_TO_TICKS(100)); // ta bort?
