@@ -19,6 +19,7 @@ static lv_obj_t * alarm_label = NULL;
 static lv_obj_t * popup_bg = NULL;
 static lv_obj_t * popup_label = NULL;
 static lv_obj_t * fire_popup_bg = NULL;
+static lv_obj_t * door_popup_bg = NULL;
 
 lv_obj_t * main_scr = NULL;
 
@@ -28,6 +29,7 @@ lv_obj_t * ui_options_screen_init(void);
 lv_obj_t * ui_status_screen_init(void);
 void ui_armed_popup(void);
 void ui_fire_popup(void);
+void ui_door_popup(void);
 
 static void clear_home_screen_pointers(){
     inside_box = NULL;
@@ -156,8 +158,70 @@ void ui_armed_popup(void){
     a.user_data = bg;
     lv_anim_start(&a);
 }
+// ==== DOOR OPENED POPUP ====
+static void popup_door_anim_exec_cb(void * var, int32_t v){
+    lv_obj_t * lbl = (lv_obj_t *)var;
+    lv_label_set_text_fmt(lbl, "DOOR OPENED!\nALARM IN %d s", (int)v);
+}
+    //user failed to disarm the alarm (press abort button)
+static void popup_door_anim_ready_cb(lv_anim_t * a){
+    if(door_popup_bg){
+        lv_obj_delete(door_popup_bg);
+        door_popup_bg=NULL;
+    }
+    printf("Disarm timer expired. Alarm triggering...\n");
+}
 
-// ==== FIRE POPUP ==== not able to be triggered yet
+static void popup_door_abort_cb(lv_event_t * e){
+    lv_obj_t *bg = (lv_obj_t *)lv_event_get_user_data(e);
+    resetAlarm();
+
+    if(bg) lv_obj_delete(bg);
+    door_popup_bg=NULL;
+    printf("Countdown stopped by user");
+}
+
+void ui_door_popup(void){
+    if (door_popup_bg) return;
+
+    door_popup_bg = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(door_popup_bg, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(door_popup_bg,lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(door_popup_bg, LV_OPA_70, 0);
+    lv_obj_remove_flag(door_popup_bg, LV_OBJ_FLAG_SCROLLABLE);
+    //popup box
+    lv_obj_t * box = lv_obj_create(door_popup_bg);
+    lv_obj_set_size(box, 220, 130);
+    lv_obj_center(box);
+    lv_obj_set_style_bg_color(box, lv_palette_main(LV_PALETTE_ORANGE), 0);
+    // label
+    lv_obj_t * lbl = lv_label_create(box);
+    lv_obj_set_width(lbl, 180);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, 10);
+    //abort btn
+    lv_obj_t * btn = lv_button_create(box);
+    lv_obj_set_size(btn, 90, 35);    
+    lv_obj_set_align(btn, LV_ALIGN_BOTTOM_MID);
+    lv_obj_add_event_cb(btn, popup_door_abort_cb, LV_EVENT_CLICKED, door_popup_bg);
+    lv_obj_t * btn_lbl = lv_label_create(btn);
+    lv_label_set_text(btn_lbl, "ABORT");
+    lv_obj_center(btn_lbl);
+
+    // animation config
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, lbl);       // The label to change
+    lv_anim_set_values(&a, 30, 0);   // Start at 5, end at 0
+    lv_anim_set_duration(&a, ENTRY_TIMER_COUNTDOWN); // 5000 = 5 seconds (ms)
+    lv_anim_set_exec_cb(&a, popup_door_anim_exec_cb);     
+    lv_anim_set_completed_cb(&a, popup_door_anim_ready_cb); 
+    a.user_data = door_popup_bg;
+    lv_anim_start(&a);
+}
+
+
+// ==== FIRE POPUP ====
 static void popup_fire_abort_cb(lv_event_t * e){
     lv_obj_t * bg = (lv_obj_t *)lv_event_get_user_data(e);
     node.alarmStatus.ALARM_FIRE=false;
@@ -358,12 +422,15 @@ void lvgl_port_task(void *arg){
     while (1) {
         uint32_t time_till_next = 10;
         if (xSemaphoreTake(xGuiSemaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
-            
             uint32_t now = lv_tick_get();
+
             // update inside temp and humidity
             if (now - last_sensor_update > 1000) { // Update every second
                 if (inside_temp && inside_humid) {
-                    lv_label_set_text_fmt(inside_temp, "%d°C", (int)node.sensorData.indoorTemp);
+                    char temp_buf[32];
+                    snprintf(temp_buf, sizeof(temp_buf),"%.1f°C", (float)node.sensorData.indoorTemp);
+                    lv_label_set_text_fmt(inside_temp, temp_buf);
+            
                     lv_label_set_text_fmt(inside_humid, "%d%%", (int)node.sensorData.indoorHumidity);
                 }
                 last_sensor_update=now;
@@ -375,7 +442,11 @@ void lvgl_port_task(void *arg){
                 lv_obj_delete(fire_popup_bg);
                 fire_popup_bg=NULL;
             }
-            
+            //check doorQueue for trigger
+            uint8_t door_cmd;
+            if(xQueueReceive(doorQueue, &door_cmd, 0)==pdTRUE) ui_door_popup();
+
+
             uint32_t idle_time = lv_display_get_inactive_time(NULL); // Returns ms
             if (idle_time > 20000) { // 20s of inactivity
                 set_bl_brightness(2); // Dim to 2%
